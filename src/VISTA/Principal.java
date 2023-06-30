@@ -6,9 +6,19 @@ package VISTA;
 
 import java.io.File;
 import java.io.IOException;
+import org.eclipse.jgit.api.CloneCommand;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.MergeResult;
+import org.eclipse.jgit.api.PullCommand;
 import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.api.errors.NoHeadException;
+import org.eclipse.jgit.api.errors.WrongRepositoryStateException;
+import org.eclipse.jgit.lib.ObjectId;
+import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.lib.RepositoryState;
+import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
+import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 
 /**
  *
@@ -17,19 +27,115 @@ import org.eclipse.jgit.lib.Repository;
 public class Principal extends javax.swing.JFrame {
 
     private static final String REMOTE_URL = "https://github.com/Masaldoter/SISTEMA-POS.git";
-    private static final String LOCAL_PATH = "//";
+    private static final String LOCAL_FOLDER = "C:/"+getRepoNameFromUrl(REMOTE_URL);
+    private static final String USERNAME = "aldoyagu@gmail.com";
+    private static final String PASSWORD = "Aldo-40805837";
 
     public Principal() {
         initComponents();
     }
     
+    private static void createLocalFolder() {
+        String repoName = LOCAL_FOLDER;
+        String folderPath = LOCAL_FOLDER + File.separator + repoName;
+
+        File folder = new File(folderPath);
+
+        if (folder.exists()) {
+            System.out.println("El directorio local ya existe: " + folderPath);
+        } else {
+            boolean created = folder.mkdir();
+
+            if (created) {
+                System.out.println("Directorio local creado: " + folderPath);
+            } else {
+                System.out.println("Error al crear el directorio local: " + folderPath);
+            }
+        }
+    }
+    
+    private static String getRepoNameFromUrl(String url) {
+        int lastIndex = url.lastIndexOf("/");
+        if (lastIndex != -1 && lastIndex < url.length() - 1) {
+            return url.substring(lastIndex + 1, url.length() - 4);
+        }
+        return null;
+    }
+    
     public void BUSCAR_ACTUALIZACIONES(){
-        try (Repository repository = Git.open(new File(LOCAL_PATH)).getRepository()) {
+        try (Repository repository = Git.open(new File(LOCAL_FOLDER)).getRepository()) {
+            // Crear instancia de Git
             Git git = new Git(repository);
-            git.pull().call();
-            System.out.println("Repositorio actualizado exitosamente.");
-        } catch (IOException | GitAPIException e) {
-            System.out.println("Error al actualizar el repositorio: " + e.getMessage());
+
+            // Obtener el commit actual
+            Ref head = repository.exactRef("HEAD");
+            ObjectId currentCommitId = head.getObjectId();
+
+            // Realizar operación de pull
+            PullCommand pullCommand = git.pull();
+            pullCommand.call();
+
+            // Obtener el commit después de la fusión
+            head = repository.exactRef("HEAD");
+            ObjectId mergedCommitId = head.getObjectId();
+
+            // Verificar si hay cambios
+            boolean hasChanges = !currentCommitId.equals(mergedCommitId);
+            if (hasChanges) {
+                jLabel6.setText("No hay cambios en el repositorio.");
+            } else {
+                jLabel6.setText("Se encontraron cambios en el repositorio.");
+            }
+        } catch (NoHeadException e) {
+            jLabel6.setText("El repositorio no tiene una rama principal.");
+        } catch (WrongRepositoryStateException e) {
+            jLabel6.setText("El repositorio no está en el estado correcto.");
+        } catch (GitAPIException e) {
+            jLabel6.setText("Error al actualizar el repositorio: " + e.getMessage());
+        } catch (IOException e) {
+            jLabel6.setText("Error al abrir el repositorio: " + e.getMessage());
+        }
+    }
+    
+    public void DESCARGAR_DATOS(){
+        try {
+            // Verificar si el directorio local ya existe
+            File localPath = new File(LOCAL_FOLDER);
+            if (localPath.exists() && localPath.isDirectory()) {
+                // Si el directorio local existe y no está vacío, lanzar una excepción
+                if (localPath.listFiles().length > 0) {
+                    System.out.println(localPath.getAbsoluteFile());
+                    throw new RuntimeException("El directorio local ya existe y no esta vacio.");
+                }
+            } else {
+                createLocalFolder();
+                INICIAR_CARPETA_GIT();
+            }
+
+            // Clonar el repositorio en el directorio local
+            CloneCommand cloneCommand = Git.cloneRepository()
+                    .setURI(REMOTE_URL)
+                    .setDirectory(localPath);
+            Git git = cloneCommand.call();
+
+            System.out.println("Repositorio clonado en: " + git.getRepository().getDirectory());
+
+            // Cerrar la instancia de Git después de su uso
+            git.close();
+        } catch (GitAPIException e) {
+            System.out.println("Error al descargar el repositorio de Git: " + e.getMessage());
+        }
+    }
+    
+    public void INICIAR_CARPETA_GIT(){
+        try {
+            // Inicializar el repositorio
+            Repository repository = FileRepositoryBuilder.create(new File(LOCAL_FOLDER, ".git"));
+            repository.create();
+
+            System.out.println("Repositorio de Git inicializado exitosamente en: " + LOCAL_FOLDER);
+        } catch (IOException e) {
+            System.out.println("Error al inicializar el repositorio de Git: " + e.getMessage());
         }
     }
 
@@ -54,6 +160,7 @@ public class Principal extends javax.swing.JFrame {
         jButton2 = new javax.swing.JButton();
         jPanel3 = new javax.swing.JPanel();
         jLabel6 = new javax.swing.JLabel();
+        jButton3 = new javax.swing.JButton();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
 
@@ -140,7 +247,12 @@ public class Principal extends javax.swing.JFrame {
                 .addContainerGap())
         );
 
-        jLabel6.setText("jLabel6");
+        jButton3.setText("DESCARGAR");
+        jButton3.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton3ActionPerformed(evt);
+            }
+        });
 
         javax.swing.GroupLayout jPanel3Layout = new javax.swing.GroupLayout(jPanel3);
         jPanel3.setLayout(jPanel3Layout);
@@ -148,15 +260,19 @@ public class Principal extends javax.swing.JFrame {
             jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel3Layout.createSequentialGroup()
                 .addContainerGap()
-                .addComponent(jLabel6)
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(jButton3, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(jLabel6, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addContainerGap())
         );
         jPanel3Layout.setVerticalGroup(
             jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel3Layout.createSequentialGroup()
                 .addContainerGap()
-                .addComponent(jLabel6)
-                .addContainerGap(78, Short.MAX_VALUE))
+                .addComponent(jLabel6, javax.swing.GroupLayout.PREFERRED_SIZE, 22, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(jButton3, javax.swing.GroupLayout.DEFAULT_SIZE, 66, Short.MAX_VALUE)
+                .addContainerGap())
         );
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
@@ -184,6 +300,10 @@ public class Principal extends javax.swing.JFrame {
     private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
         BUSCAR_ACTUALIZACIONES();
     }//GEN-LAST:event_jButton1ActionPerformed
+
+    private void jButton3ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton3ActionPerformed
+        DESCARGAR_DATOS();
+    }//GEN-LAST:event_jButton3ActionPerformed
 
     /**
      * @param args the command line arguments
@@ -223,6 +343,7 @@ public class Principal extends javax.swing.JFrame {
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton jButton1;
     private javax.swing.JButton jButton2;
+    private javax.swing.JButton jButton3;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel2;
     private javax.swing.JLabel jLabel3;
